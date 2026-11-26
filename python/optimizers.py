@@ -119,5 +119,92 @@ def optimizer_gso(objective, lower, upper, initial, opts):
             history.append(best)
 
     return _result(best, xbest, history)
+
+    def optimizer_gsodbo(objective, lower, upper, initial, opts):
+    """
+    Hibrit Glider Snake + Dung Beetle Optimizer (GSODBO)
+    ---------------------------------------------------
+    Ana iskelet : Glider Snake Optimizer (GSO)
+    DBO katkısı : (1) En kötü çözümden kaçış (ball-rolling itme terimi),
+                  (2) En iyi çözüm etrafında dinamik daralan sömürü sınırı (breeding),
+                  (3) Zayıf bireyler için hırsız (thief) yerel arama adımı.
+    Bütçe       : Ekstra amaç fonksiyonu çağrısı yapmadan max_evals (320 FEs) ile çalışır.
+    """
+    rng, pop, costs, best, xbest, history = _initialize(objective, lower, upper, initial, opts)
+    N, D = pop.shape
+    budget = opts['max_evals']
+    lo = np.asarray(lower, dtype=float)
+    hi = np.asarray(upper, dtype=float)
+    span = hi - lo
+
+    # Popülasyonun en zayıf %20'lik dilimi için eşik indeks (DBO hırsız grubu)
+    thief_start = max(1, int(0.8 * N))
+
+    while len(history) < budget:
+        progress = len(history) / float(budget)
+        R = 1.0 - progress              # DBO dinamik daralma katsayısı (1 -> 0)
+        glide_factor = 2.0 * R          # GSO süzülme katsayısı (2 -> 0)
+
+        # Bireyleri mevcut başarısına göre sırala: pop[0] en iyi, pop[-1] en kötü
+        order = np.argsort(costs)
+        pop = pop[order]
+        costs = costs[order]
+        xworst = pop[-1]
+
+        # DBO dinamik daralan bölge sınırları (negatif parametrelere uyumlu simetrik yapı)
+        half_box = 0.5 * R * span
+        lb_star = np.maximum(xbest - half_box, lo)
+        ub_star = np.minimum(xbest + half_box, hi)
+
+        for i in range(N):
+            if len(history) >= budget:
+                break
+
+            prev_snake = xbest if i == 0 else pop[i - 1]
+
+            if i >= thief_start:
+                # DBO Fazı: Zayıf yılanlar için Hırsız (Thief) yerel araması
+                g = rng.normal(size=D)
+                S = 0.5 * R
+                proposal = xbest + S * g * (
+                    np.abs(pop[i] - xbest) + np.abs(pop[i] - prev_snake)
+                )
+            elif rng.random() < 0.5:
+                # Hibrit Keşif: GSO sinüzoidal süzülme + DBO en kötüden uzaklaşma
+                r1 = rng.random(D)
+                r2 = rng.random(D)
+                r_rep = rng.random(D)
+                gso_step = (
+                    glide_factor * np.sin(2.0 * np.pi * r1) * (xbest - pop[i])
+                    + glide_factor * np.cos(2.0 * np.pi * r2) * (prev_snake - pop[i])
+                )
+                dbo_avoid = 0.15 * glide_factor * r_rep * (pop[i] - xworst)
+                proposal = pop[i] + gso_step + dbo_avoid
+            else:
+                # Hibrit Sömürü: DBO dinamik daralan bölge (breeding) + GSO kılavuzluğu
+                b1 = rng.random(D)
+                b2 = rng.random(D)
+                proposal = xbest + b1 * (pop[i] - lb_star) + b2 * (pop[i] - ub_star)
+                proposal = np.clip(proposal, lb_star, ub_star)
+
+            # Genel parametre sınırları içine çekme
+            proposal = np.clip(proposal, lo, hi)
+
+            # Amaç fonksiyonu değerlendirmesi (her çağrı bütçeden sayılır)
+            value = float(objective(proposal.copy()))
+            if not np.isfinite(value):
+                raise ValueError('Nonfinite GSODBO objective')
+
+            # Açgözlü seçim (greedy selection)
+            if value < costs[i]:
+                pop[i] = proposal
+                costs[i] = value
+                if value < best:
+                    best = value
+                    xbest = proposal.copy()
+
+            history.append(best)
+
+    return _result(best, xbest, history)
     
     raise NotImplementedError('Implement your selected heuristic here')
