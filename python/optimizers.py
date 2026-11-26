@@ -120,7 +120,8 @@ def optimizer_gso(objective, lower, upper, initial, opts):
 
     return _result(best, xbest, history)
 
-    def optimizer_gsodbo(objective, lower, upper, initial, opts):
+
+def optimizer_gsodbo(objective, lower, upper, initial, opts):
     """
     Hibrit Glider Snake + Dung Beetle Optimizer (GSODBO)
     ---------------------------------------------------
@@ -206,5 +207,3 @@ def optimizer_gso(objective, lower, upper, initial, opts):
             history.append(best)
 
     return _result(best, xbest, history)
-    
-    raise NotImplementedError('Implement your selected heuristic here')
