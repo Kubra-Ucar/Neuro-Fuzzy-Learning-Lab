@@ -29,7 +29,7 @@ from course_core import (
     train_mlp, train_random_nn, train_fnn, train_meta_fnn,
     ridge_solve, predict, classification_metrics, rmse
 )
-from optimizers import optimizer_gso, optimizer_ga, optimizer_pso
+from optimizers import optimizer_gso, optimizer_gsodbo, optimizer_ga, optimizer_pso
 
 
 def _extract_model(res):
@@ -211,7 +211,7 @@ def main():
                     f"| MacroF1={row['macro_f1']:.4f} "
                     f"| Süre={elapsed:.2f}s"
                 )
-                if model_name == 'FNN-GSO':
+                if model_name in ('FNN-GSO', 'FNN-GSODBO'):
                     print(f"    [FNN-GSO Karışıklık Matrisi]:\n{m['confusion_matrix_verified']}")
             else:
                 m = regression_metrics_full(yte, pred)
@@ -256,7 +256,12 @@ def main():
 
         # --- 4) Sezgisel Optimizasyonlu FNN Modelleri (FNN-GSO, FNN-GA, FNN-PSO) ---
         # Tüm sezgisel yöntemler aynı başlangıç FNN yapısından ve aynı 320 FEs bütçesinden başlar
-        for name, opt_fn in [('FNN-GSO', optimizer_gso), ('FNN-GA', optimizer_ga), ('FNN-PSO', optimizer_pso)]:
+        for name, opt_fn in [
+    ('FNN-GSO', optimizer_gso),
+    ('FNN-GSODBO', optimizer_gsodbo),
+    ('FNN-GA', optimizer_ga),
+    ('FNN-PSO', optimizer_pso),
+]:
             initial = init_fnn(Xtr, cfg.rules, 1, seed)
             t0 = time.perf_counter()
             model, search = train_meta_fnn(initial, Xtr, ytr, Xval, yval, cfg, seed, opt_fn)
